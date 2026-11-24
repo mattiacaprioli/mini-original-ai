@@ -1,73 +1,70 @@
-import { useState, type FormEvent } from 'react'
-import { useAgentChat, type ToolStatus } from './useAgentChat'
-
-// Nomi leggibili per i tool: l'utente non deve vedere "get_order_status".
-const TOOL_LABELS: Record<string, string> = {
-  get_order_status: "Controllo lo stato dell'ordine",
-  search_knowledge_base: 'Cerco nei documenti',
-}
-
-function ToolBadge({ tool }: { tool: ToolStatus }) {
-  const label = TOOL_LABELS[tool.name] ?? tool.name
-  const icon = tool.state === 'running' ? '⏳' : tool.state === 'ok' ? '✅' : '⚠️'
-  return (
-    <div className="tool">
-      {icon} {label}
-      {tool.state === 'running' ? '…' : ` (${tool.ms} ms)`}
-    </div>
-  )
-}
+import { Composer } from './components/Composer'
+import { EmptyState } from './components/EmptyState'
+import { ArrowDownIcon, PlusIcon } from './components/Icons'
+import { MessageView } from './components/MessageView'
+import { useDocumentUpload } from './hooks/useDocumentUpload'
+import { useStickToBottom } from './hooks/useStickToBottom'
+import { useAgentChat } from './useAgentChat'
 
 export default function App() {
-  const { messages, isStreaming, error, send, stop, newChat } = useAgentChat()
-  const [input, setInput] = useState('')
-
-  function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    const text = input.trim()
-    if (!text || isStreaming) return
-    setInput('')
-    void send(text)
-  }
+  const { messages, isStreaming, error, send, stop, retry, newChat } = useAgentChat()
+  const upload = useDocumentUpload()
+  const lastText = messages.at(-1)?.text.length ?? 0
+  // Si riscorre in fondo quando arriva testo e quando la risposta finisce (compaiono fonti e azioni).
+  const scroll = useStickToBottom(`${messages.length}:${lastText}:${isStreaming}:${error}`)
 
   return (
-    <main className="chat">
-      <header>
-        <h1>Mini Original AI</h1>
-        <button type="button" className="secondary" onClick={newChat}>Nuova chat</button>
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <img src="/mark.svg" alt="" width={30} height={30} />
+          <div>
+            <p className="brand-name">Negozio Demo</p>
+            <p className="brand-sub">
+              <span className="dot" aria-hidden /> Assistente clienti, modelli e dati in locale
+            </p>
+          </div>
+        </div>
+        {messages.length > 0 && (
+          <button type="button" className="ghost-button" onClick={newChat} aria-label="Nuova chat">
+            <PlusIcon />
+            <span className="label">Nuova chat</span>
+          </button>
+        )}
       </header>
 
-      <div className="messages">
-        {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`}>
-            {m.tools.map((t) => (
-              <ToolBadge key={t.id} tool={t} />
-            ))}
-            {m.text || (m.role === 'assistant' && isStreaming && i === messages.length - 1 ? '…' : '')}
-            {m.sources.length > 0 && (
-              <div className="sources">
-                Fonti: {[...new Set(m.sources.map((s) => s.source))].join(' · ')}
-              </div>
-            )}
-          </div>
-        ))}
+      <main className="conversation" ref={scroll.ref} onScroll={scroll.onScroll}>
+        <div className="column">
+          {messages.length === 0 ? (
+            <EmptyState onPick={send} />
+          ) : (
+            messages.map((m, i) => (
+              <MessageView key={m.id} message={m} streaming={isStreaming && i === messages.length - 1} />
+            ))
+          )}
+
+          {error && (
+            <div className="error" role="alert">
+              <p>La risposta non è arrivata: {error}</p>
+              <button type="button" className="ghost-button" onClick={retry}>
+                Riprova
+              </button>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {!scroll.atBottom && (
+        <button type="button" className="jump" onClick={() => scroll.scrollToBottom()} aria-label="Vai all'ultimo messaggio">
+          <ArrowDownIcon />
+        </button>
+      )}
+
+      <div className="dock">
+        <div className="column">
+          <Composer isStreaming={isStreaming} onSend={send} onStop={stop} upload={upload} />
+        </div>
       </div>
-
-      {error && <div className="error">Errore: {error}</div>}
-
-      <form onSubmit={onSubmit}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Chiedi di un ordine, es. A che punto è A-1002?"
-          autoFocus
-        />
-        {isStreaming ? (
-          <button type="button" onClick={stop}>Stop</button>
-        ) : (
-          <button type="submit">Invia</button>
-        )}
-      </form>
-    </main>
+    </div>
   )
 }
