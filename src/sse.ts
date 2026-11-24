@@ -1,5 +1,6 @@
 // Union discriminata: ogni evento ha un "type" e TypeScript sa quali campi ha ciascuno.
 export type StreamEvent =
+  | { type: "meta"; conversationId: string }
   | { type: "token"; text: string }
   | { type: "tool_start"; id: string; name: string; args: unknown }
   | { type: "tool_end"; id: string; name: string; ok: boolean; ms: number }

@@ -18,7 +18,7 @@ function ToolBadge({ tool }: { tool: ToolStatus }) {
 }
 
 export default function App() {
-  const { messages, isStreaming, error, send, stop } = useAgentChat()
+  const { messages, isStreaming, error, send, stop, newChat } = useAgentChat()
   const [input, setInput] = useState('')
 
   function onSubmit(e: FormEvent) {
@@ -31,7 +31,10 @@ export default function App() {
 
   return (
     <main className="chat">
-      <h1>Mini Original AI</h1>
+      <header>
+        <h1>Mini Original AI</h1>
+        <button type="button" className="secondary" onClick={newChat}>Nuova chat</button>
+      </header>
 
       <div className="messages">
         {messages.map((m, i) => (

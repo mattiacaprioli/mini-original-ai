@@ -1,6 +1,8 @@
 body { margin: 0; font-family: system-ui, sans-serif; background: #f6f6f4; color: #1d1d1b; }
 .chat { max-width: 720px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
-h1 { font-size: 20px; margin: 0 0 16px; }
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; }
+.secondary { background: transparent; color: #1d1d1b; border: 1px solid #d0d0ca; }
 .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 .msg { padding: 10px 14px; border-radius: 12px; max-width: 80%; white-space: pre-wrap; line-height: 1.45; }
 .msg.user { align-self: flex-end; background: #1d1d1b; color: #fff; }

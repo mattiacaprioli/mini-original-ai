@@ -10,6 +10,7 @@ export function useAgentChat() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const conversationIdRef = useRef<string | null>(null) // memorizza l'id della conversazione corrente, ricevuto dal server
 
   // Aggiorna l'ultimo messaggio (quello dell'assistente in arrivo).
   // Forma funzionale di setState: arrivano decine di token al secondo e ognuno deve partire dallo stato più recente.
@@ -32,7 +33,7 @@ export function useAgentChat() {
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, conversationId: conversationIdRef.current ?? undefined }),
         signal: controller.signal, // abort qui = il server riceve req.signal e ferma il modello
       })
 
@@ -57,6 +58,9 @@ export function useAgentChat() {
             break
           case 'done':
             break
+          case 'meta':
+            conversationIdRef.current = event.conversationId
+            break
           default: {
             // Se un giorno il server aggiunge un tipo di evento e qui non lo gestisci, TypeScript dà errore.
             const unhandled: never = event
@@ -74,8 +78,16 @@ export function useAgentChat() {
 
   const stop = () => abortRef.current?.abort()
 
+  // Nuova chat: dimentichiamo l'id, il server ne creerà uno nuovo al prossimo messaggio.
+  function newChat() {
+    stop()
+    conversationIdRef.current = null
+    setMessages([])
+    setError(null)
+  }
+
   // Se il componente viene smontato a metà risposta, chiudiamo la richiesta.
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  return { messages, isStreaming, error, send, stop }
+  return { messages, isStreaming, error, send, stop, newChat }
 }
