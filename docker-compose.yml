@@ -7,5 +7,14 @@ services:
     volumes:
       - mongo-data:/data/db
 
+  redis:
+    # Redis: è dove BullMQ salva la coda dei job.
+    image: redis:7-alpine
+    ports:
+      - "6380:6379" # 6380 sul Mac, per non scontrarsi con un eventuale altro Redis
+    volumes:
+      - redis-data:/data
+
 volumes:
   mongo-data:
+  redis-data:
