@@ -5,6 +5,12 @@ chat in streaming, tool calling, memoria della conversazione e caricamento di do
 
 Stack: **Bun + TypeScript**, **LangChain.js**, **Ollama** (LLM ed embedding locali), **MongoDB Atlas Local**, **BullMQ + Redis**, **React + Vite**.
 
+![Conversazione: l'assistente controlla un ordine, poi risponde dai documenti del negozio indicando quelli consultati](docs/screenshots/chat.png)
+
+| Schermata iniziale | Tema scuro | Mobile |
+| --- | --- | --- |
+| <img src="docs/screenshots/home.png" alt="Schermata iniziale con domande di esempio" width="320"> | <img src="docs/screenshots/chat-dark.png" alt="Conversazione con tema scuro" width="320"> | <img src="docs/screenshots/mobile.png" alt="Conversazione su schermo mobile" width="150"> |
+
 ## Architettura
 
 ```
@@ -135,9 +141,13 @@ scripts/
   mcp-check.ts      Client MCP di prova
 web/src/
   sse.ts            Parser dello stream SSE (fetch + reader, non EventSource)
-  useAgentChat.ts   Hook della chat: streaming, stop, nuova chat
-  App.tsx           Interfaccia
+  useAgentChat.ts   Hook della chat: streaming, stop, riprova, nuova chat
+  App.tsx           Layout
+  components/       Messaggi (passaggi, citazioni, fonti), composer, schermata iniziale, icone
+  hooks/            Scorrimento automatico, caricamento documenti
+web/public/fonts/   Hanken Grotesk ospitato in locale (licenza OFL)
 docs/faq.md         Documento di esempio per il RAG
+docs/screenshots/   Immagini per questo README
 ```
 
 ## Scelte tecniche
@@ -153,6 +163,7 @@ docs/faq.md         Documento di esempio per il RAG
 - **Hybrid search con RRF**: gli embedding capiscono il significato, il full-text trova le parole esatte (es. "TWINT"); le classifiche si fondono per posizione.
 - **Isolamento per tenant**: `tenantId` è un campo filtro dell'indice vettoriale e arriva dal server, mai dagli argomenti del modello.
 - **Server MCP sugli stessi tool**: una sola implementazione per l'agente e per i client MCP; tool marcati `readOnlyHint`, errori restituiti come `isError`.
+- **Interfaccia trasparente**: per ogni risposta si vedono i passaggi (ordine controllato, documenti consultati) e le fonti; "Fonti" solo quando il testo cita davvero, altrimenti "Documenti consultati". Font ospitato in locale, nessuna richiesta a terzi.
 - **Upload sicuro**: estensioni e dimensione validate; il percorso su disco usa un id generato, mai il nome del file (protezione dal path traversal).
 
 ## Prossimi passi
