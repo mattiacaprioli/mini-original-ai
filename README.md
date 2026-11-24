@@ -9,7 +9,8 @@ Stack: **Bun + TypeScript**, **LangChain.js**, **Ollama** (LLM ed embedding loca
 
 ```
 Browser (React) ──SSE──> Server Bun ──> Agente (LangChain) ──> Ollama (qwen2.5:7b)
-                              │               └──> Tool: get_order_status
+                              │               ├──> Tool: get_order_status
+                              │               └──> Tool: search_knowledge_base ──> hybrid search (vettoriale + full-text, RRF)
                               │
                               ├──> MongoDB: conversazioni, documenti, chunk + embedding
                               └──> Redis (BullMQ) ──> Worker: chunking + embedding (bge-m3)
@@ -17,6 +18,7 @@ Browser (React) ──SSE──> Server Bun ──> Agente (LangChain) ──> O
 
 - **Chat**: risposta in streaming via SSE con eventi tipizzati (`meta`, `token`, `tool_start`, `tool_end`, `error`, `done`).
 - **Ingestion**: l'upload risponde subito `202`, un worker separato elabora il documento dalla coda.
+- **RAG**: a ogni domanda (tranne i saluti) il codice riscrive la domanda usando la storia, poi cerca l'ordine o nei documenti; il modello risponde citando le fonti, che arrivano anche al client come evento `sources`.
 
 ## Prerequisiti
 
@@ -68,6 +70,7 @@ Per fermare i database: `docker compose down` (i dati restano nei volumi).
 | `POST` | `/chat` | Chat semplice senza tool (SSE) |
 | `POST` | `/documents` | Upload di un documento `.md` o `.txt` (multipart, campo `file`, max 2 MB) |
 | `GET` | `/documents/:id` | Stato dell'elaborazione: `queued`, `processing`, `ready`, `failed` |
+| `GET` | `/search?q=...` | Debug: le classifiche vettoriale, full-text e ibrida per una domanda |
 | `GET` | `/health` | Health check |
 
 Esempi:
@@ -100,6 +103,7 @@ src/
   worker.ts         Worker di ingestion (processo separato)
   ingest.ts         Chunking, embedding e salvataggio dei chunk
   documents.ts      Collection documents e chunks
+  search.ts         Indici Atlas Search, ricerca vettoriale, full-text e fusione RRF
   embeddings.ts     Modello di embedding
   storage.ts        Salvataggio dei file originali
 web/src/
@@ -117,11 +121,15 @@ docs/faq.md         Documento di esempio per il RAG
 - **Storia della conversazione sul server**: il client manda solo un `conversationId` e non può falsificare la storia.
 - **TTL di 30 giorni** sui messaggi: la policy di conservazione dei dati la applica il database.
 - **Ingestion asincrona**: retry con backoff esponenziale, job idempotenti, deduplica tramite hash del contenuto.
+- **Recupero deterministico**: nei test il 7B non decideva da solo di cercare e inventava risposte ("sì, spediamo in Giappone"). La ricerca la fa sempre il codice; il modello scrive solo la risposta.
+- **Riscrittura della domanda**: "e quando arriva?" diventa "Quando arriva l'ordine A-1002?" prima della ricerca.
+- **Hybrid search con RRF**: gli embedding capiscono il significato, il full-text trova le parole esatte (es. "TWINT"); le classifiche si fondono per posizione.
+- **Isolamento per tenant**: `tenantId` è un campo filtro dell'indice vettoriale e arriva dal server, mai dagli argomenti del modello.
 - **Upload sicuro**: estensioni e dimensione validate; il percorso su disco usa un id generato, mai il nome del file (protezione dal path traversal).
 
 ## Prossimi passi
 
-- [ ] Ricerca vettoriale con Atlas Vector Search, hybrid search e citazione delle fonti
+- [x] Ricerca vettoriale con Atlas Vector Search, hybrid search e citazione delle fonti
 - [ ] Server MCP che espone gli stessi tool
 - [ ] Autenticazione e isolamento per tenant
 - [ ] Set di eval automatici per prompt e tool

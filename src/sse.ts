@@ -4,6 +4,7 @@ export type StreamEvent =
   | { type: "token"; text: string }
   | { type: "tool_start"; id: string; name: string; args: unknown }
   | { type: "tool_end"; id: string; name: string; ok: boolean; ms: number }
+  | { type: "sources"; sources: { n: number; source: string; documentId: string }[] }
   | { type: "done" }
   | { type: "error"; message: string };
 

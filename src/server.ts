@@ -6,6 +6,7 @@ import { ensureIndexes, loadHistory, saveMessage } from "./conversations";
 import { documents, ensureDocumentIndexes } from "./documents";
 import { createChatModel } from "./llm";
 import { ingestQueue } from "./queue";
+import { ensureSearchIndexes, hybridSearch } from "./search";
 import { sseResponse, type StreamEvent } from "./sse";
 import { saveFile } from "./storage";
 
@@ -25,6 +26,7 @@ const ALLOWED_EXTENSIONS = [".md", ".txt"];
 try {
   await ensureIndexes();
   await ensureDocumentIndexes();
+  await ensureSearchIndexes(); // la prima volta può richiedere qualche decina di secondi
 } catch (err) {
   console.error("MongoDB non raggiungibile. Hai avviato `docker compose up -d`?\n", (err as Error).message);
   process.exit(1);
@@ -60,7 +62,7 @@ async function* agentWithMemory(
   let answer = "";
   let completed = false;
   try {
-    for await (const event of streamAgent(history, message, signal)) {
+    for await (const event of streamAgent(history, message, signal, { tenantId: TENANT_ID })) {
       if (event.type === "token") answer += event.text;
       yield event;
     }
@@ -136,6 +138,18 @@ const server = Bun.serve({
         );
         if (!doc) return Response.json({ error: "documento non trovato" }, { status: 404 });
         return Response.json(doc);
+      },
+    },
+
+    // Endpoint di debug: mostra le tre classifiche (vettoriale, full-text, ibrida) per una domanda.
+    "/search": {
+      GET: async (req) => {
+        const query = new URL(req.url).searchParams.get("q")?.trim();
+        if (!query) return Response.json({ error: "parametro q mancante" }, { status: 400 });
+        const results = await hybridSearch(query, TENANT_ID);
+        const short = (hits: { source: string; text: string; score: number }[]) =>
+          hits.map((h) => ({ source: h.source, score: Number(h.score.toFixed(4)), text: h.text.slice(0, 80) }));
+        return Response.json({ vector: short(results.vector), text: short(results.text), hybrid: short(results.hybrid) });
       },
     },
 

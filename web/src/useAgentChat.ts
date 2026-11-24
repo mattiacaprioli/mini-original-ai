@@ -1,9 +1,9 @@
 // @ts-ignore React's types are not available in the current TypeScript setup.
 import { useEffect, useRef, useState } from 'react'
-import { readEvents } from './sse'
+import { readEvents, type Source } from './sse'
 
 export type ToolStatus = { id: string; name: string; state: 'running' | 'ok' | 'error'; ms?: number }
-export type Message = { role: 'user' | 'assistant'; text: string; tools: ToolStatus[] }
+export type Message = { role: 'user' | 'assistant'; text: string; tools: ToolStatus[]; sources: Source[] }
 
 export function useAgentChat() {
   const [messages, setMessages] = useState<Message[]>([])
@@ -21,8 +21,8 @@ export function useAgentChat() {
     setError(null)
     setMessages((prev) => [
       ...prev,
-      { role: 'user', text, tools: [] },
-      { role: 'assistant', text: '', tools: [] },
+      { role: 'user', text, tools: [], sources: [] },
+      { role: 'assistant', text: '', tools: [], sources: [] },
     ])
     setIsStreaming(true)
 
@@ -52,6 +52,9 @@ export function useAgentChat() {
                 t.id === event.id ? { ...t, state: event.ok ? 'ok' : 'error', ms: event.ms } : t,
               ),
             }))
+            break
+          case 'sources':
+            updateLast((m) => ({ ...m, sources: [...m.sources, ...event.sources] }))
             break
           case 'error':
             setError(event.message)

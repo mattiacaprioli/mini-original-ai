@@ -4,6 +4,7 @@ import { useAgentChat, type ToolStatus } from './useAgentChat'
 // Nomi leggibili per i tool: l'utente non deve vedere "get_order_status".
 const TOOL_LABELS: Record<string, string> = {
   get_order_status: "Controllo lo stato dell'ordine",
+  search_knowledge_base: 'Cerco nei documenti',
 }
 
 function ToolBadge({ tool }: { tool: ToolStatus }) {
@@ -43,6 +44,11 @@ export default function App() {
               <ToolBadge key={t.id} tool={t} />
             ))}
             {m.text || (m.role === 'assistant' && isStreaming && i === messages.length - 1 ? '…' : '')}
+            {m.sources.length > 0 && (
+              <div className="sources">
+                Fonti: {[...new Set(m.sources.map((s) => s.source))].join(' · ')}
+              </div>
+            )}
           </div>
         ))}
       </div>
