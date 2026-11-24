@@ -52,6 +52,30 @@ Servono quattro processi, ognuno nella sua finestra del terminale:
 
 Per fermare i database: `docker compose down` (i dati restano nei volumi).
 
+## Server MCP
+
+Gli stessi tool dell'agente (`get_order_status`, `search_knowledge_base`) e la risorsa `docs://documenti`
+sono esposti come server [MCP](https://modelcontextprotocol.io) con trasporto stdio, utilizzabile da Claude Desktop, IDE o altri agenti.
+
+```bash
+bun scripts/mcp-check.ts                                  # client di prova: elenca e chiama tool e risorse
+npx @modelcontextprotocol/inspector bun src/mcp.ts        # interfaccia grafica di debug
+```
+
+Configurazione per Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "mini-original-ai": {
+      "command": "/percorso/assoluto/di/bun",
+      "args": ["--cwd", "/percorso/assoluto/di/mini-original-ai", "src/mcp.ts"],
+      "env": { "MONGODB_URI": "mongodb://localhost:27018/?directConnection=true" }
+    }
+  }
+}
+```
+
 ## Porte
 
 | Servizio | Porta |
@@ -106,6 +130,9 @@ src/
   search.ts         Indici Atlas Search, ricerca vettoriale, full-text e fusione RRF
   embeddings.ts     Modello di embedding
   storage.ts        Salvataggio dei file originali
+  mcp.ts            Server MCP (stdio) con gli stessi tool dell'agente
+scripts/
+  mcp-check.ts      Client MCP di prova
 web/src/
   sse.ts            Parser dello stream SSE (fetch + reader, non EventSource)
   useAgentChat.ts   Hook della chat: streaming, stop, nuova chat
@@ -125,11 +152,12 @@ docs/faq.md         Documento di esempio per il RAG
 - **Riscrittura della domanda**: "e quando arriva?" diventa "Quando arriva l'ordine A-1002?" prima della ricerca.
 - **Hybrid search con RRF**: gli embedding capiscono il significato, il full-text trova le parole esatte (es. "TWINT"); le classifiche si fondono per posizione.
 - **Isolamento per tenant**: `tenantId` è un campo filtro dell'indice vettoriale e arriva dal server, mai dagli argomenti del modello.
+- **Server MCP sugli stessi tool**: una sola implementazione per l'agente e per i client MCP; tool marcati `readOnlyHint`, errori restituiti come `isError`.
 - **Upload sicuro**: estensioni e dimensione validate; il percorso su disco usa un id generato, mai il nome del file (protezione dal path traversal).
 
 ## Prossimi passi
 
 - [x] Ricerca vettoriale con Atlas Vector Search, hybrid search e citazione delle fonti
-- [ ] Server MCP che espone gli stessi tool
+- [x] Server MCP che espone gli stessi tool
 - [ ] Autenticazione e isolamento per tenant
 - [ ] Set di eval automatici per prompt e tool
