@@ -4,7 +4,7 @@ import { AIMessage, ToolMessage } from "@langchain/core/messages";
 import { MCPAdapter } from "@langchain/mcp-adapters";
 import { createAgent, toolCallLimitMiddleware, toolRetryMiddleware } from "langchain";
 import { createChatModel } from "../src/llm";
-import { guardrails, toolResultToText } from "./agent-v3";
+import { guardrails, toolResultToText } from "../src/middleware";
 
 const adapter = new MCPAdapter({
   servers: {
