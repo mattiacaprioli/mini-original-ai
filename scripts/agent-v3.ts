@@ -13,6 +13,8 @@ const ORDER_CODE = /\bA-\d{4}\b/gi;
 const LANGCHAIN_TOPIC = /\b(langchain|langgraph|mcp)\b/i;
 const SMALL_TALK = /^(ciao|grazie|ok|salve|buongiorno|buonasera)\b[\s!.]*$/i;
 
+const UNAVAILABLE = "Il servizio non è disponibile in questo momento. Riprova tra qualche minuto.";
+
 // Il CODICE decide quale tool chiamare, non il modello 7B.
 function route(text: string, available: Set<string>): AIMessage | undefined {
   if (SMALL_TALK.test(text.trim())) return undefined;
@@ -23,6 +25,9 @@ function route(text: string, available: Set<string>): AIMessage | undefined {
     : LANGCHAIN_TOPIC.test(text) && available.has(DOCS_TOOL) // se il server docs è giù → ripiego sul negozio
       ? [{ name: DOCS_TOOL, args: { query: text } }]
       : [{ name: SEARCH_TOOL, args: { query: text } }];
+
+  // Server spento all'avvio → il suo tool non c'è: rispondiamo noi, senza far inventare il modello.
+  if (calls.some((c) => !available.has(c.name))) return new AIMessage(UNAVAILABLE);
 
   return new AIMessage({
     content: "",
@@ -41,6 +46,14 @@ export const guardrails = createMiddleware({
       const forced = route(last.text, available);
       if (forced) return forced;
     }
+
+    // Tutti i tool appena chiamati sono falliti (timeout, server giù) → risposta fissa, niente modello.
+    const lastResults: ToolMessage[] = [];
+    for (const m of [...request.messages].reverse()) {
+      if (!ToolMessage.isInstance(m)) break;
+      lastResults.push(m);
+    }
+    if (lastResults.length && lastResults.every((m) => m.status === "error")) return new AIMessage(UNAVAILABLE);
 
     // Giri successivi (o small talk): il modello deve solo RISPONDERE, senza tool.
     const response = await handler({ ...request, tools: [] });

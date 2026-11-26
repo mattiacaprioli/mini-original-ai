@@ -8,6 +8,7 @@ import { createMcpServer } from "./mcp-server";
 // Così un modello (o un prompt malevolo) non può chiedere i dati di un altro cliente.
 
 const PORT = Number(process.env.MCP_HTTP_PORT ?? 3001);
+const SLOW_MS = Number(process.env.MCP_SLOW_MS ?? 0);
 
 // In produzione: token OAuth verificato (firma, scadenza, scope). Qui: una mappa token → tenant.
 // Formato: MCP_TOKENS="token1=tenantA,token2=tenantB"
@@ -31,6 +32,12 @@ Bun.serve({
     if (!tenantId) {
       // 401 + WWW-Authenticate: è la risposta standard che dice al client "serve un token".
       return new Response("Unauthorized", { status: 401, headers: { "WWW-Authenticate": "Bearer" } });
+    }
+
+    // SOLO PER TEST (passo 10b): MCP_SLOW_MS=5000 rallenta le chiamate ai tool per simulare un server lento.
+    if (SLOW_MS) {
+      const body = (await req.clone().json().catch(() => null)) as { method?: string } | null;
+      if (body?.method === "tools/call") await Bun.sleep(SLOW_MS);
     }
 
     // Modalità STATELESS: un server e un trasporto nuovi per ogni richiesta, nessuna sessione in memoria.
