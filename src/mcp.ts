@@ -1,3 +1,4 @@
+import type { ToolMessage } from "@langchain/core/messages";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -30,8 +31,14 @@ for (const t of tools) {
     },
     async (args) => {
       try {
-        const content = await t.invoke(args); // con argomenti semplici restituisce solo il testo per il modello
-        return { content: [{ type: "text" as const, text: String(content) }] };
+        // Invocato con una ToolCall, il tool restituisce un ToolMessage: testo per il modello + eventuale artifact.
+        const message = (await t.invoke({ id: crypto.randomUUID(), name: t.name, args, type: "tool_call" })) as ToolMessage;
+        const sources = (message.artifact as { sources?: unknown[] } | undefined)?.sources;
+        return {
+          content: [{ type: "text" as const, text: String(message.content) }],
+          // Le fonti viaggiano come dati strutturati: il client le riceve senza doverle estrarre dal testo.
+          ...(sources ? { structuredContent: { sources } } : {}),
+        };
       } catch (err) {
         // Errore come risultato (isError), non come eccezione: il modello del client lo vede e può reagire.
         return { isError: true, content: [{ type: "text" as const, text: `Errore: ${(err as Error).message}` }] };

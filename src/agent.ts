@@ -2,9 +2,13 @@ import { AIMessage, HumanMessage, SystemMessage, ToolMessage, type AIMessageChun
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { createChatModel } from "./llm";
 import type { StreamEvent } from "./sse";
-import { createTools, type Source } from "./tools";
+import { loadMcpTools } from "./mcp-client";
+import type { Source } from "./tools";
 
 const MAX_STEPS = 5;
+// I tool arrivano dal server MCP "negozio": LangChain aggiunge il nome del server come prefisso.
+const ORDER_TOOL = "negozio_get_order_status";
+const SEARCH_TOOL = "negozio_search_knowledge_base";
 const ORDER_CODE = /\bA-\d{4}\b/gi;
 // Saluti e ringraziamenti brevi: non serve cercare nei documenti (e il 7B li userebbe a sproposito).
 const SMALL_TALK = /^\s*(ciao|salve|buongiorno|buonasera|grazie|ok|perfetto|ottimo)\b[\s\S]{0,30}$/i;
@@ -46,8 +50,10 @@ async function* runTool(
   messages: BaseMessage[],
   toolsByName: Map<string, StructuredToolInterface>,
 ): AsyncGenerator<StreamEvent> {
-  const id = call.id!;
-  yield { type: "tool_start", id, name: call.name, args: call.args };
+  const id = call.id ?? crypto.randomUUID();
+  // Al client mandiamo il nome senza il prefisso del server: all'interfaccia non interessa da quale server arriva.
+  const name = call.name.replace(/^[a-z0-9]+_/, "");
+  yield { type: "tool_start", id, name, args: call.args };
 
   const started = performance.now();
   let message: ToolMessage;
@@ -63,23 +69,30 @@ async function* runTool(
     message = new ToolMessage({ content: `Errore: ${(err as Error).message}`, tool_call_id: id });
   }
 
-  yield { type: "tool_end", id, name: call.name, ok, ms: Math.round(performance.now() - started) };
+  yield { type: "tool_end", id, name, ok, ms: Math.round(performance.now() - started) };
 
-  // Le fonti arrivano al client dal codice, non dal testo del modello: sono sempre affidabili.
-  const sources = (message.artifact as { sources?: Source[] } | undefined)?.sources;
-  if (sources?.length) yield { type: "sources", sources };
+  // Le fonti arrivano dal server MCP come "structuredContent" (dati strutturati, oltre al testo):
+  // LangChain le mette nell'artifact del ToolMessage, in una voce di tipo "mcp_structured_content".
+  const sources = sourcesFromArtifact(message.artifact);
+  if (sources.length) yield { type: "sources", sources };
 
   messages.push(message);
+}
+
+function sourcesFromArtifact(artifact: unknown): Source[] {
+  const entries = Array.isArray(artifact) ? artifact : [];
+  const structured = entries.find((e) => e?.type === "mcp_structured_content")?.data as { sources?: Source[] } | undefined;
+  return structured?.sources ?? [];
 }
 
 export async function* streamAgent(
   history: BaseMessage[],
   userMessage: string,
   signal: AbortSignal,
-  ctx: { tenantId: string },
 ): AsyncGenerator<StreamEvent> {
-  // Tool creati per questa richiesta, con il tenant dell'utente.
-  const tools = createTools(ctx);
+  // I tool arrivano dai server MCP (caricati una volta all'avvio), non da un import nel codice.
+  // Il tenant ora lo decide il server MCP: con stdio è uno per processo (vedi passo 10 per il tenant per utente).
+  const tools = await loadMcpTools();
   const model = baseModel.bindTools(tools);
   const toolsByName = new Map<string, StructuredToolInterface>(tools.map((t) => [t.name, t]));
 
@@ -98,8 +111,8 @@ export async function* streamAgent(
     // Codice ordine presente → dati dell'ordine. Altrimenti → ricerca nei documenti.
     const calls: ToolCall[] =
       codes.length > 0
-        ? codes.map((orderId) => ({ id: crypto.randomUUID(), name: "get_order_status", args: { orderId }, type: "tool_call" }))
-        : [{ id: crypto.randomUUID(), name: "search_knowledge_base", args: { query: question }, type: "tool_call" }];
+        ? codes.map((orderId) => ({ id: crypto.randomUUID(), name: ORDER_TOOL, args: { orderId }, type: "tool_call" }))
+        : [{ id: crypto.randomUUID(), name: SEARCH_TOOL, args: { query: question }, type: "tool_call" }];
 
     // Una richiesta di tool "come se l'avesse fatta il modello", seguita dai risultati veri.
     messages.push(new AIMessage({ content: "", tool_calls: calls }));

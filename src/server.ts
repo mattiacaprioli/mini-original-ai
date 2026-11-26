@@ -5,6 +5,7 @@ import { streamAgent } from "./agent";
 import { ensureIndexes, loadHistory, saveMessage } from "./conversations";
 import { documents, ensureDocumentIndexes } from "./documents";
 import { createChatModel } from "./llm";
+import { loadMcpTools } from "./mcp-client";
 import { ingestQueue } from "./queue";
 import { ensureSearchIndexes, hybridSearch } from "./search";
 import { sseResponse, type StreamEvent } from "./sse";
@@ -62,7 +63,7 @@ async function* agentWithMemory(
   let answer = "";
   let completed = false;
   try {
-    for await (const event of streamAgent(history, message, signal, { tenantId: TENANT_ID })) {
+    for await (const event of streamAgent(history, message, signal)) {
       if (event.type === "token") answer += event.text;
       yield event;
     }
@@ -167,4 +168,7 @@ const server = Bun.serve({
   },
 });
 
+// Collegamento ai server MCP: se il server del negozio non parte, ci fermiamo subito con un errore chiaro.
+const mcpTools = await loadMcpTools();
+console.log(`Tool MCP caricati: ${mcpTools.map((t) => t.name).join(", ")}`);
 console.log(`Server su ${server.url}`);
